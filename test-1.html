@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Go Slow key test</title>
+<style>body{font-family:system-ui,sans-serif;margin:16px;line-height:1.4;background:#fff;color:#111}
+@media(prefers-color-scheme:dark){body{background:#111;color:#eee}}
+h1{font-size:20px}.box{border:1px solid #888;border-radius:10px;padding:10px;margin:10px 0}
+b.ok{color:#2e9e5b}b.bad{color:#d63b2b}pre{white-space:pre-wrap;word-break:break-all;font-size:12px;margin:6px 0 0}</style></head>
+<body>
+<h1>Go Slow key test</h1>
+<p>Tap the button. Each box shows what TomTom answered. Your key is hidden.</p>
+<button id="go" style="padding:12px 18px;font-size:16px">Run test</button>
+<div id="out"></div>
+<script src="config.js"></script>
+<script>
+var KEY=(window.GOSLOW&&window.GOSLOW.TOMTOM_KEY)||"";
+var out=document.getElementById("out");
+function add(title,ok,text){var d=document.createElement("div");d.className="box";
+ d.innerHTML="<b class='"+(ok?"ok":"bad")+"'>"+(ok?"OK":"PROBLEM")+"</b> "+title+"<pre></pre>";
+ d.querySelector("pre").textContent=text;out.appendChild(d);}
+function show(t){return String(t).split(KEY).join("[key]")}
+function run(title,url,blob){
+ return fetch(url).then(function(r){
+  if(blob){return r.blob().then(function(b){add(title,r.ok,"HTTP "+r.status+", "+r.headers.get("content-type")+", "+b.size+" bytes")})}
+  return r.text().then(function(t){add(title,r.ok,"HTTP "+r.status+"\n"+show(t).slice(0,400))});
+ }).catch(function(e){add(title,false,"Could not reach TomTom from this page: "+e.message)});
+}
+
+var PTS=[["Yaba",6.5095,3.3711],["Ojota",6.5870,3.3790],["Third Mainland mid",6.4850,3.3950],["Lekki Phase 1",6.4474,3.4700],["Ikeja",6.6018,3.3515],["Apapa",6.4489,3.3590]];
+var ZOOMS=[10,14,18,22];
+function speeds(k){
+ var lines=[],jobs=[];
+ PTS.forEach(function(p){ZOOMS.forEach(function(z){
+  jobs.push(fetch("https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/"+z+"/json?"+k+"&point="+p[1]+","+p[2]).then(function(r){return r.json().then(function(j){
+   var d=j.flowSegmentData;lines.push(p[0]+" zoom "+z+": "+(d?("OK "+d.currentSpeed+" km/h now, "+d.freeFlowSpeed+" normal"):("no ("+((j.detailedError&&j.detailedError.message)||j.error||r.status)+")")))
+  })}).catch(function(e){lines.push(p[0]+" zoom "+z+": error "+e.message)}));
+ })});
+ return Promise.all(jobs).then(function(){lines.sort();var ok=lines.some(function(l){return l.indexOf(": OK")>-1});add("Traffic speeds at 6 Lagos spots, 4 detail levels",ok,lines.join("\n"))});
+}
+function tiles(k){
+ var T=[["zoom 12 over Lagos",12,2086,1973],["zoom 13 over Lagos",13,4172,3947],["zoom 14 over Lagos",14,8345,7894]],box=document.createElement("div");
+ box.className="box";box.innerHTML="<b>Traffic colour tiles</b> (coloured lines = data; blank = nothing)<br>";out.appendChild(box);
+ return Promise.all(T.map(function(t){return fetch("https://api.tomtom.com/traffic/map/4/tile/flow/relative/"+t[1]+"/"+t[2]+"/"+t[3]+".png?"+k+"&tileSize=256").then(function(r){return r.blob().then(function(b){
+  var w=document.createElement("div");w.style.cssText="display:inline-block;margin:6px;font-size:12px";
+  w.innerHTML="<div style='background:#999;width:256px;height:256px'><img width=256 height=256 src='"+URL.createObjectURL(b)+"'></div>"+t[0]+": HTTP "+r.status+", "+b.size+" bytes";box.appendChild(w)})}).catch(function(e){box.appendChild(document.createTextNode(t[0]+": error "+e.message))})}));
+}
+document.getElementById("go").onclick=function(){
+ out.innerHTML="";
+ var ks="Key read from config.js: length "+KEY.length+", starts with \""+KEY.slice(0,3)+"\", ends with \""+KEY.slice(-3)+"\"";
+ if(/\s|"|'/.test(KEY))ks+="\nWARNING: the key contains a space or quote mark.";
+ add("Key check",KEY.length===32,ks+"\n(TomTom keys are normally 32 characters.)");
+ var k="key="+encodeURIComponent(KEY);
+ run("Search service (basic key test)","https://api.tomtom.com/search/2/search/lagos.json?"+k+"&limit=1")
+ .then(function(){return speeds(k)})
+ .then(function(){return tiles(k)})
+ .then(function(){return run("Traffic incidents in Lagos","https://api.tomtom.com/traffic/services/5/incidentDetails?"+k+"&bbox=3.2,6.4,3.6,6.7&fields="+encodeURIComponent("{incidents{type}}")+"&language=en-GB&timeValidityFilter=present")});
+};
+</script></body></html>
