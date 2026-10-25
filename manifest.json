@@ -1,0 +1,13 @@
+{
+  "name": "Go Slow Lagos",
+  "short_name": "Go Slow",
+  "description": "Live Lagos traffic, detected automatically.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#EBEFEC",
+  "theme_color": "#F2B705",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"}
+  ]
+}
